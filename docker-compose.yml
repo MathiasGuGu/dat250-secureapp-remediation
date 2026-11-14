@@ -32,7 +32,7 @@ services:
       POSTGRES_USER: dat250
       POSTGRES_PASSWORD: dat250
     ports:
-      - "0.0.0.0:5432:5432"
+      - "127.0.0.1:15432:5432"
     networks:
       - dat250-net
     volumes:
