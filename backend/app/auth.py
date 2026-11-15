@@ -1,15 +1,34 @@
 import hashlib
+import hmac
+import re
 import secrets
+from argon2 import PasswordHasher
+from argon2.exceptions import InvalidHashError, VerificationError
 from fastapi import Request
 from app.database import run_query
 
+_hasher = PasswordHasher()
+_LEGACY_SHA256 = re.compile(r"[0-9a-f]{64}")
+
 
 def hash_password(password: str) -> str:
-    return hashlib.sha256(password.encode()).hexdigest()
+    return _hasher.hash(password)
 
 
 def verify_password(password: str, password_hash: str) -> bool:
-    return hash_password(password) == password_hash
+    if _LEGACY_SHA256.fullmatch(password_hash):
+        legacy = hashlib.sha256(password.encode()).hexdigest()
+        return hmac.compare_digest(legacy, password_hash)
+    try:
+        return _hasher.verify(password_hash, password)
+    except (VerificationError, InvalidHashError):
+        return False
+
+
+def needs_rehash(password_hash: str) -> bool:
+    if _LEGACY_SHA256.fullmatch(password_hash):
+        return True
+    return _hasher.check_needs_rehash(password_hash)
 
 
 def create_session(user_id: int) -> str:

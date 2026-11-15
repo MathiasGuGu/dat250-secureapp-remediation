@@ -2,7 +2,7 @@ import time
 from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
-from app.auth import hash_password, verify_password, create_session, clear_session, get_user_from_session
+from app.auth import hash_password, verify_password, needs_rehash, create_session, clear_session, get_user_from_session
 from app.database import run_query
 from app.email_service import send_reset_email
 
@@ -31,6 +31,12 @@ def login(request: Request, email: str = Form(...), password: str = Form(...)):
     if not verify_password(password, user["password_hash"]):
         return templates.TemplateResponse(
             "login.html", {"request": request, "error": "Invalid password for this account."}
+        )
+    if needs_rehash(user["password_hash"]):
+        run_query(
+            "UPDATE users SET password_hash=%s WHERE id=%s",
+            (hash_password(password), user["id"]),
+            commit=True,
         )
 
     token = create_session(user["id"])
