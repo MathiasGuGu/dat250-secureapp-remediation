@@ -66,18 +66,18 @@ def update_profile(
     phone: str = Form(""),
     address: str = Form(""),
     bio: str = Form(""),
-    role: str = Form("student"),
 ):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
 
+    # Only self-editable fields are accepted; role is server-owned and only changed via the admin role endpoint.
     run_query(
         """
-        UPDATE users SET full_name=%s, phone=%s, address=%s, bio=%s, role=%s
+        UPDATE users SET full_name=%s, phone=%s, address=%s, bio=%s
         WHERE id=%s
         """,
-        (full_name, phone, address, bio, role, user["id"]),
+        (full_name, phone, address, bio, user["id"]),
         commit=True,
     )
     return RedirectResponse(f"/profile/{user['id']}", status_code=302)
