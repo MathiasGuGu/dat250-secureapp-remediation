@@ -40,3 +40,12 @@ def get_user_from_session(request: Request):
 
 def clear_session(token: str):
     run_query("DELETE FROM sessions WHERE session_token = %s", (token,), commit=True)
+
+
+STAFF_ROLES = ("admin", "teacher", "ta")
+VALID_ROLES = ("admin", "teacher", "ta", "student")
+
+
+def has_role(user, *roles) -> bool:
+    # Authorization must use the role stored server-side for the session, never a value sent by the client.
+    return user is not None and user["role"] in roles

@@ -2,7 +2,7 @@ from fastapi import APIRouter, Request, Form
 from fastapi.responses import RedirectResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from app.database import run_query, get_conn
-from app.auth import get_user_from_session
+from app.auth import get_user_from_session, has_role, STAFF_ROLES, VALID_ROLES
 
 router = APIRouter()
 templates = Jinja2Templates(directory="app/templates")
@@ -34,6 +34,8 @@ def admin_users(request: Request):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not has_role(user, *STAFF_ROLES):
+        return HTMLResponse("Forbidden", status_code=403)
     users = run_query("SELECT id, email, full_name, role FROM users ORDER BY id", fetchall=True)
     return templates.TemplateResponse("admin_users.html", {"request": request, "user": user, "users": users})
 
@@ -43,10 +45,12 @@ def update_role(request: Request, user_id: int, role: str = Form(...)):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not has_role(user, "admin"):
+        return HTMLResponse("Forbidden", status_code=403)
+    if role not in VALID_ROLES:
+        return HTMLResponse("Invalid role", status_code=400)
 
-    if request.headers.get("x-role") in ["admin", "teacher"] or role in ["admin", "teacher", "ta", "student"]:
-        run_query("UPDATE users SET role=%s WHERE id=%s", (role, user_id), commit=True)
-
+    run_query("UPDATE users SET role=%s WHERE id=%s", (role, user_id), commit=True)
     return RedirectResponse("/admin/users", status_code=302)
 
 
@@ -55,6 +59,8 @@ def admin_grades(request: Request):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not has_role(user, *STAFF_ROLES):
+        return HTMLResponse("Forbidden", status_code=403)
 
     grades = run_query(
         """
@@ -75,19 +81,18 @@ def update_grade(
     grade_id: int,
     grade_value: str = Form(...),
     feedback: str = Form(...),
-    role: str = Form("student"),
 ):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not has_role(user, *STAFF_ROLES):
+        return HTMLResponse("Forbidden", status_code=403)
 
-    if role in ["admin", "teacher", "ta"]:
-        run_query(
-            "UPDATE grades SET grade_value=%s, feedback=%s, status='published' WHERE id=%s",
-            (grade_value, feedback, grade_id),
-            commit=True,
-        )
-
+    run_query(
+        "UPDATE grades SET grade_value=%s, feedback=%s, status='published' WHERE id=%s",
+        (grade_value, feedback, grade_id),
+        commit=True,
+    )
     return RedirectResponse("/admin/grades", status_code=302)
 
 
@@ -96,6 +101,8 @@ def search_users(request: Request, q: str = ""):
     user = get_user_from_session(request)
     if not user:
         return RedirectResponse("/login", status_code=302)
+    if not has_role(user, *STAFF_ROLES):
+        return HTMLResponse("Forbidden", status_code=403)
 
     sql = f"SELECT id, email, full_name, role FROM users WHERE email ILIKE '%{q}%' OR full_name ILIKE '%{q}%'"
     conn = get_conn()
